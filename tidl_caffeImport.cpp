@@ -88,6 +88,11 @@ using ::google::protobuf::io::CodedOutputStream;
 
 int quantizationStyle;
 
+
+//for output caffemodel file only
+extern char *gpModeltxtFile;
+extern int giopmodeltxtEn;
+
 #define QUAN_STYLE01_ROUND (0.5)
 
 #define ENABLE_FIXED_QUANT_STYLE (0)
@@ -294,8 +299,16 @@ bool Tidl_ExportBinaryDataToTxtData(const Message & netParams)
   int32_t           fd;
   bool              success;
   FileOutputStream   *output;
-  printf("Writing caffemodel into txt file...");
-  fd = open("CaffeNetWorkParameters.txt", O_WRONLY | O_CREAT);
+
+  if(gpModeltxtFile != NULL && gpModeltxtFile[0]!='\0')
+  {
+    printf("Writing caffemodel into txt file %s...",gpModeltxtFile);
+    fd = open(gpModeltxtFile, O_WRONLY | O_CREAT);
+  }
+  else{
+    printf("Writing caffemodel into txt file .\\CaffeNetWorkParameters.txt...");
+    fd = open("CaffeNetWorkParameters.txt", O_WRONLY | O_CREAT);
+  }
   output = new FileOutputStream(fd);
   success = google::protobuf::TextFormat::Print(netParams, output);
 
@@ -362,7 +375,7 @@ NetParameter         netStructure,
 NetParameter         netParams)
 {
   int32_t             status, id;
-  int32_t             pad, stride;
+  int32_t             padH, padW, stride;
   int32_t             paramSet = 0;
   int32_t             dataSize;
   int32_t             conv2DRandParams = 0;
@@ -398,18 +411,47 @@ NetParameter         netParams)
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.numGroups      =
   netStructure.layer(i).convolution_param().group();
   // printf("Layer num: %d, checkpoint (4)\n",i);
-  pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelW        =
-  netStructure.layer(i).convolution_param().kernel_w();//kernel_size(0);
+  if(netStructure.layer(i).convolution_param().has_kernel_w()){
+    pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelW        =
+    netStructure.layer(i).convolution_param().kernel_w();//kernel_size(0);
+  }
+  else{
+    pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelW        =
+    netStructure.layer(i).convolution_param().kernel_size(0);
+  }
   // printf("Layer num: %d, checkpoint (5)\n",i);
-  pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelH        =
-  netStructure.layer(i).convolution_param().kernel_h();//kernel_size(0);
+  if (netStructure.layer(i).convolution_param().has_kernel_h()) {
+    pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelH        =
+    netStructure.layer(i).convolution_param().kernel_h();//kernel_size(0);
+  }
+  else{
+    pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.kernelH        =
+    netStructure.layer(i).convolution_param().kernel_size(0);
+  }
   // printf("Layer num: %d, checkpoint (6)\n",i);
-  if (netStructure.layer(i).convolution_param().pad_size() == 0) {
-    pad = 0;
+  if (netStructure.layer(i).convolution_param().has_pad_h()) {
+    padH =  netStructure.layer(i).convolution_param().pad_h();
   }
-  else {
-    pad = netStructure.layer(i).convolution_param().pad(0);
+  else{
+    if (netStructure.layer(i).convolution_param().pad_size() == 0) {
+      padH = 0;
+    }
+    else {
+      padH = netStructure.layer(i).convolution_param().pad(0);
+    }
   }
+  if (netStructure.layer(i).convolution_param().has_pad_w()) {
+    padW =  netStructure.layer(i).convolution_param().pad_w();
+  }
+  else{
+    if (netStructure.layer(i).convolution_param().pad_size() == 0) {
+      padW = 0;
+    }
+    else {
+      padW = netStructure.layer(i).convolution_param().pad(0);
+    }
+  }
+
   if (netStructure.layer(i).convolution_param().stride_size() == 0) {
     stride = 1;
   }
@@ -431,9 +473,9 @@ NetParameter         netParams)
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.strideH=
   stride;
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.padW   =
-  pad;
+  padW;
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].layerParams.convParams.padH   =
-  pad;
+  padH;
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].outData[0].numDim       =
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].inData[0].numDim;
   pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].outData[0].dimValues[0] =
@@ -1818,7 +1860,7 @@ int32_t              layerType)
   else
   {
 
-    if(layerType == 0)
+    if(layerType == 0)//BatchNorm
     {
       eps = netParams.layer(id).batch_norm_param().eps();
       if(netParams.layer(id).blobs_size() == 5)
@@ -1851,8 +1893,8 @@ int32_t              layerType)
       {
            for(j = 0; j < dataSize; j++)
            {
-             mean[j]  = netParams.layer(id).blobs(0).data(j);
-             var[j]   = netParams.layer(id).blobs(1).data(j);
+             mean[j]  = netParams.layer(id).blobs(0).data(j)/netParams.layer(id).blobs(2).data(0);
+             var[j]   = netParams.layer(id).blobs(1).data(j)/netParams.layer(id).blobs(2).data(0);
              scale[j] = 1;
              bias[j]  = 0;
            }
@@ -1862,7 +1904,7 @@ int32_t              layerType)
         printf("Un-suported number of blobs for BN, datasize = %d\n",dataSize);
       }
     }
-    else if(layerType == 1)
+    else if(layerType == 1)//bias
     {
          for(j = 0; j < dataSize; j++)
          {
@@ -1872,7 +1914,7 @@ int32_t              layerType)
            bias[j]  = netParams.layer(id).blobs(0).data(j);
          }
     }
-    else if(layerType == 2)
+    else if(layerType == 2)//scale
     {
       // printf("Layer num: %d, data size %d, checkpoint (5)\n",i,dataSize);
          for(j = 0; j < dataSize; j++)
@@ -1880,7 +1922,8 @@ int32_t              layerType)
            mean[j]  = 0;
            var[j]   = 1;
            scale[j] = netParams.layer(id).blobs(0).data(j);
-           bias[j]  = netParams.layer(id).blobs(2).data(j);
+           // bias[j]  = netParams.layer(id).blobs(2).data(j);
+           bias[j]  = netParams.layer(id).blobs(1).data(j);
          }
          // printf("Layer num: %d, data size %d, checkpoint (6)\n",i,dataSize);
     }
@@ -2159,6 +2202,8 @@ void TIDL_UpdateOutDataBuff(sTIDL_OrgNetwork_t * pOrgTIDLNetStructure, uint32_t 
     return;
 }
 
+
+
 extern sTIDL_OrgNetwork_t      orgTIDLNetStructure;
 extern sTIDL_Network_t         tIDLNetStructure;
 void caffe_import( tidl_import_config * params)
@@ -2211,7 +2256,8 @@ void caffe_import( tidl_import_config * params)
   //
   TIDL_appCNNConverRawDataToData(netParams);
   //
-  // Tidl_ExportBinaryDataToTxtData(netParams);
+  if(giopmodeltxtEn)
+    Tidl_ExportBinaryDataToTxtData(netParams);
   // printf("Reading file %s checkpoint (4)\n",(const char *)params->inputParamsFile);
   //
   fp1 = fopen((const char *)params->outputParamsFile, "wb+");
@@ -2321,6 +2367,21 @@ void caffe_import( tidl_import_config * params)
       // printf("Layer num: %d, checkpoint (3)\n",i);
       TIDL_importConvParams(&orgTIDLNetStructure, fp1, i, layerIndex, dataIndex,
       netStructure, netParams);
+      // if (!strcmp((char*)orgTIDLNetStructure.TIDLPCLayers[layerIndex].name,"conv_1_conv2d")) {
+      //   printf("\n---Current convolution dimensions:dimVAlues[2]:%d,padH*2:%d,kernelH:%d,dilationH:%d,strideH:%d\n",
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].inData[0].dimValues[2],
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].layerParams.convParams.padH*2,
+      //   // netStructure.layer(i).convolution_param().kernel_size(0),
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].layerParams.convParams.kernelH,
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].layerParams.convParams.dilationH,
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].layerParams.convParams.strideH);
+      //   printf("\nCurrent Layer %s output dimension: %d,%d,%d,%d---\n",
+      //   (char*)orgTIDLNetStructure.TIDLPCLayers[layerIndex].name,
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].dimValues[0],
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].dimValues[1],
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].dimValues[2],
+      //   orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].dimValues[3]);
+      // }
       layerIndex++;
       dataIndex++;
       // printf("Layer num: %d, checkpoint (4)\n",i);
@@ -2405,8 +2466,8 @@ void caffe_import( tidl_import_config * params)
 #else
     // printf("Layer num: %d, checkpoint (4)\n",i);
       TIDL_importBatchNormParams(&orgTIDLNetStructure, i, &layerIndex, &dataIndex,
-      // netStructure,netParams,2);
-      netStructure,netParams,1);
+      netStructure,netParams,2);
+      // netStructure,netParams,1);
 #endif
       // printf("Layer num: %d, checkpoint (5)\n",i);
     }
@@ -2944,6 +3005,7 @@ void caffe_import( tidl_import_config * params)
     }
   }
   tIDLNetStructure.numLayers = tiLayerIndex + 1;
+  printf("Total layers processed %d\n", tIDLNetStructure.numLayers);
 
   printf("Total Giga Macs : %4.4f\n", ((float)totalMacs/1000000000));
   printf("Total Giga Macs : %4.4f @15 fps\n", 15*((float)totalMacs/1000000000));

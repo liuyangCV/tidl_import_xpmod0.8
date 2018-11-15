@@ -274,6 +274,10 @@ int32_t tidlValidateImportParams(tidl_import_config * params)
   }
 }
 
+//for output caffemodel file only
+char *gpModeltxtFile;
+int giopmodeltxtEn;
+
 sTIDL_OrgNetwork_t      orgTIDLNetStructure;
 sTIDL_Network_t         tIDLNetStructure;
 void caffe_import( tidl_import_config * params);
@@ -284,6 +288,9 @@ int32_t main(int32_t argc, char *argv[])
   int32_t status = 0;
   int32_t runQuantStep = 0;
   FILE * fp;
+
+
+
   if(argc < 2)
   {
     printf("Number of input parameters are not enough \n");
@@ -291,6 +298,16 @@ int32_t main(int32_t argc, char *argv[])
     exit(-1);
   }
 
+  if(argc > 2)
+  {
+    gpModeltxtFile = argv[2];
+    giopmodeltxtEn = 1;
+    printf("Will Output the caffemodel file as txt file %s later...\n",gpModeltxtFile );
+  }
+  else
+  {
+    giopmodeltxtEn = 0;
+  }
 
   fp = fopen(argv[1], "r");
   if(fp== NULL)
