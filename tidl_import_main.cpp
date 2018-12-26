@@ -156,6 +156,7 @@ void tidlQuantStatsTool(tidl_import_config * params)
   // printf("Quantstat checkpoint(0)\n");
   // return;
   sprintf(sysCommand, " %s .\\tempDir\\configFilesList.txt",params->tidlStatsTool);
+  printf(sysCommand);
   system(sysCommand);
 
   return;

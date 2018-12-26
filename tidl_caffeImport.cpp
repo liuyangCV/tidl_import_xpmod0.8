@@ -926,7 +926,7 @@ NetParameter         netParams)
     id = TIDL_appCNNInteropCaffeFindLayerByName((char*)pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].name,netParams);
     if(id == -1)
     {
-      printf("Could not file BN Params\n");\
+      printf("Could not file BN Params for layer name %s\n",(char*)pOrgTIDLNetStructure->TIDLPCLayers[layerIndex].name);\
       exit(0);
     }
     uint32_t j, dataSize = netParams.layer(id).blobs(0).data_size();
@@ -1840,6 +1840,8 @@ int32_t              layerType)
   else
   {
     dataSize = netParams.layer(id).blobs(0).data_size();
+    //
+    // printf("layerIndex %d, dataSize for batchnorm layer %d: %d\n", layerIndex, id,dataSize);
   }
 
   float * mean  = (float*)malloc(dataSize*sizeof(float));
@@ -2300,6 +2302,8 @@ void caffe_import( tidl_import_config * params)
       {
         orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].dimValues[j] =
         netStructure.input_shape(i).dim(j);
+        //
+        // printf("Inputlayer shape %d, dim %d,dimvalue %d\n", i,j,netStructure.input_shape(i).dim(j));
       }
       orgTIDLNetStructure.TIDLPCLayers[layerIndex].outData[0].elementType =
       gParams.inElementType;
